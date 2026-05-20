@@ -1,0 +1,34 @@
+[
+  {
+    "id": "STU-930B67B9",
+    "first_name": "Ali",
+    "last_name": "Karimov",
+    "birth_date": "",
+    "parent_name": "Bobur",
+    "parent_phone": "998901234567",
+    "group": "Kichik",
+    "monthly_fee": 500000,
+    "payment_due_day": 1,
+    "join_date": "2026-05-20",
+    "status": "active",
+    "image": "",
+    "telegram_chat_id": "",
+    "notes": ""
+  },
+  {
+    "id": "STU-FF724E76",
+    "first_name": "Raufbek",
+    "last_name": "Turaqulov",
+    "birth_date": "2012-07-10",
+    "parent_name": "Bekzod Samiyev",
+    "parent_phone": "+998880334404",
+    "group": "guruh",
+    "monthly_fee": 250000,
+    "payment_due_day": 1,
+    "join_date": "2026-05-20",
+    "status": "active",
+    "image": "/static/uploads/edb69bb4-0b2c-48.jpg",
+    "telegram_chat_id": "6439945348",
+    "notes": "Sinov"
+  }
+]

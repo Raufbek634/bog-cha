@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}To'lovlar — Smart Kindergarten{% endblock %}
+{% block page_title %}💳 To'lovlar{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <div>
+    <div class="section-title">To'lovlar boshqaruvi</div>
+    <div class="section-sub" id="paySubtitle">Yuklanmoqda...</div>
+  </div>
+  <button class="btn btn-primary" onclick="openAddPayment()">➕ To'lov qabul qilish</button>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('history',this)">📋 To'lovlar tarixi</button>
+  <button class="tab-btn" onclick="switchTab('debtors',this)">⚠️ Qarzdorlar</button>
+</div>
+
+<!-- History tab -->
+<div id="tab-history">
+  <div class="filter-bar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="form-control" id="paySearch" placeholder="O'quvchi nomini qidiring..." oninput="loadPayments()">
+    </div>
+    <input type="month" class="form-control" id="payMonth" style="max-width:160px" onchange="loadPayments()">
+  </div>
+
+  <div class="card">
+    <div class="card-body" style="padding:0">
+      <div id="paymentsContent">
+        <div class="loading"><div class="spinner"></div>Yuklanmoqda...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Debtors tab -->
+<div id="tab-debtors" style="display:none">
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+    <input type="month" class="form-control" id="debtMonth" style="max-width:160px" onchange="loadDebtors()">
+    <button class="btn btn-warning" onclick="sendDebtReminders()">📱 SMS yuborish</button>
+  </div>
+  <div class="card">
+    <div id="debtorsContent">
+      <div class="loading"><div class="spinner"></div>Yuklanmoqda...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currency = 'UZS';
+let allStudents = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = await api('/api/settings');
+  currency = settings.currency || 'UZS';
+  const now = new Date();
+  document.getElementById('payMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('debtMonth').value = document.getElementById('payMonth').value;
+  allStudents = await api('/api/students');
+  loadPayments();
+  loadDebtors();
+});
+
+function switchTab(name, btn) {
+  ['history','debtors'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name ? '' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function loadPayments() {
+  const month = document.getElementById('payMonth').value;
+  const search = document.getElementById('paySearch').value.toLowerCase();
+  let url = '/api/payments?';
+  if (month) url += `month=${month}`;
+
+  const payments = await api(url);
+  const filtered = search ? payments.filter(p => p.student_name?.toLowerCase().includes(search)) : payments;
+  const total = filtered.reduce((s, p) => s + p.amount, 0);
+  document.getElementById('paySubtitle').textContent = `${month ? monthName(month) + ' — ' : ''}${filtered.length} ta to'lov · Jami: ${Number(total).toLocaleString()} ${currency}`;
+
+  if (!filtered.length) {
+    document.getElementById('paymentsContent').innerHTML = `<div class="empty-state"><div class="empty-icon">💳</div><h3>To'lov topilmadi</h3><p>Bu oy uchun to'lov mavjud emas</p></div>`;
+    return;
+  }
+
+  document.getElementById('paymentsContent').innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Chek ID</th><th>O'quvchi</th><th>Summa</th><th>Sana</th><th>Oy</th><th>Tur</th><th>Izoh</th><th>Admin</th><th></th></tr></thead>
+      <tbody>
+        ${filtered.map(p => `<tr>
+          <td style="font-family:monospace;font-size:11px;color:var(--text3)">${p.id}</td>
+          <td><b>${p.student_name}</b></td>
+          <td class="currency" style="color:var(--success);font-weight:800">${Number(p.amount).toLocaleString()} ${currency}</td>
+          <td>${fmtDate(p.date)}</td>
+          <td>${p.month ? monthName(p.month) : '—'}</td>
+          <td>${statusBadge(p.type)}</td>
+          <td style="color:var(--text3);font-size:12px">${p.note||'—'}</td>
+          <td style="font-size:12px;color:var(--text3)">${p.admin_name||'—'}</td>
+          <td>
+            <div style="display:flex;gap:4px">
+              <a href="/receipt/${p.id}" target="_blank" class="btn btn-ghost btn-sm btn-icon" title="Chek">🧾</a>
+              <button class="btn btn-danger btn-sm btn-icon" onclick="deletePayment('${p.id}')" title="O'chirish">🗑️</button>
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot><tr style="background:var(--surface2)">
+        <td colspan="2" style="font-weight:800;padding:12px 14px">Jami:</td>
+        <td class="currency" style="font-weight:800;color:var(--success);padding:12px 14px">${Number(total).toLocaleString()} ${currency}</td>
+        <td colspan="6"></td>
+      </tr></tfoot>
+    </table>`;
+}
+
+async function loadDebtors() {
+  const month = document.getElementById('debtMonth').value;
+  if (!month) return;
+  const [y, m] = month.split('-').map(Number);
+  const data = await api(`/api/attendance/month-summary?year=${y}&month=${m}`);
+  const debtors = data.filter(r => r.debt > 0);
+
+  if (!debtors.length) {
+    document.getElementById('debtorsContent').innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><h3>Hamma to'lagan!</h3><p>Bu oy uchun qarzdor o'quvchi yo'q</p></div>`;
+    return;
+  }
+
+  const totalDebt = debtors.reduce((s, r) => s + r.debt, 0);
+  document.getElementById('debtorsContent').innerHTML = `
+    <div style="padding:14px 16px;background:var(--danger-light);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="color:#dc2626;font-weight:700">⚠️ ${debtors.length} ta qarzdor o'quvchi</span>
+      <span class="currency" style="color:#dc2626;font-weight:800">Jami qarz: ${Number(totalDebt).toLocaleString()} ${currency}</span>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>O'quvchi</th><th>Guruh</th><th>To'lanishi kerak</th><th>To'langan</th><th>Qarz</th><th>Telefon</th><th>Amal</th></tr></thead>
+      <tbody>
+        ${debtors.map(row => {
+          const s = row.student;
+          return `<tr>
+            <td><b>${s.first_name} ${s.last_name}</b></td>
+            <td><span class="badge badge-primary">${s.group||'—'}</span></td>
+            <td class="currency">${Number(row.payable_amount).toLocaleString()} ${currency}</td>
+            <td class="currency" style="color:var(--success)">${Number(row.paid_amount).toLocaleString()} ${currency}</td>
+            <td class="currency" style="color:var(--danger);font-weight:800">${Number(row.debt).toLocaleString()} ${currency}</td>
+            <td>${phoneLink(s.parent_phone)}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="quickPayment('${s.id}','${s.first_name} ${s.last_name}',${row.debt})">💳 To'lov</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function openAddPayment() {
+  const studentOptions = allStudents.filter(s=>s.status==='active').map(s =>
+    `<option value="${s.id}">${s.first_name} ${s.last_name} (${s.group||'—'})</option>`
+  ).join('');
+  const now = new Date();
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  openModal('➕ To\'lov qabul qilish', `
+    <div class="form-group"><label class="form-label">O'quvchi *</label>
+      <select class="form-control" id="pay_student" onchange="loadStudentBalance()">
+        <option value="">Tanlang...</option>${studentOptions}
+      </select></div>
+    <div id="balanceInfo" style="display:none;padding:12px;background:var(--surface2);border-radius:8px;margin-bottom:14px;font-size:13px"></div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Summa (${currency}) *</label>
+        <input class="form-control" type="number" id="pay_amount" placeholder="500000"></div>
+      <div class="form-group"><label class="form-label">Sana</label>
+        <input class="form-control" type="date" id="pay_date" value="${new Date().toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Oy</label>
+        <input class="form-control" type="month" id="pay_month" value="${curMonth}"></div>
+      <div class="form-group"><label class="form-label">To'lov turi</label>
+        <select class="form-control" id="pay_type">
+          <option value="full">To'liq</option>
+          <option value="partial">Qisman</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Izoh</label>
+      <input class="form-control" id="pay_note" placeholder="Ixtiyoriy izoh..."></div>
+    <div class="modal-footer" style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn btn-success" onclick="savePayment()">💰 Saqlash</button>
+    </div>
+  `);
+}
+
+async function loadStudentBalance() {
+  const id = document.getElementById('pay_student').value;
+  const month = document.getElementById('pay_month')?.value;
+  if (!id) return;
+  const d = await api(`/api/student-balance/${id}`);
+  const info = document.getElementById('balanceInfo');
+  info.style.display = '';
+  info.innerHTML = `
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <span>💳 To'lanishi: <b>${Number(d.payable_amount).toLocaleString()} ${currency}</b></span>
+      <span style="color:var(--success)">✅ To'langan: <b>${Number(d.paid_amount).toLocaleString()} ${currency}</b></span>
+      <span style="color:var(--danger)">⚠️ Qarz: <b>${Number(d.debt).toLocaleString()} ${currency}</b></span>
+    </div>`;
+  if (d.debt > 0) document.getElementById('pay_amount').value = d.debt;
+}
+
+async function savePayment() {
+  const student_id = document.getElementById('pay_student').value;
+  const amount = parseInt(document.getElementById('pay_amount').value);
+  const date = document.getElementById('pay_date').value;
+  const month = document.getElementById('pay_month').value;
+  const type = document.getElementById('pay_type').value;
+  const note = document.getElementById('pay_note').value;
+
+  if (!student_id || !amount || amount <= 0) { toast('O\'quvchi va summani kiriting', 'error'); return; }
+
+  const res = await api('/api/payments', 'POST', { student_id, amount, date, month, type, note });
+  if (res.success) {
+    toast('To\'lov qabul qilindi ✅', 'success');
+    closeModal(); loadPayments(); loadDebtors();
+    if (confirm('Chekni chop etasizmi?')) window.open(`/receipt/${res.receipt_id}`, '_blank');
+  } else toast(res.message || 'Xatolik', 'error');
+}
+
+function quickPayment(id, name, debt) {
+  const now = new Date();
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  openModal(`💳 To'lov — ${name}`, `
+    <div style="padding:12px;background:var(--danger-light);border-radius:8px;margin-bottom:14px;color:#dc2626;font-weight:700">
+      ⚠️ Qarz: ${Number(debt).toLocaleString()} ${currency}
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Summa</label>
+        <input class="form-control" type="number" id="qp_amount" value="${debt}"></div>
+      <div class="form-group"><label class="form-label">Sana</label>
+        <input class="form-control" type="date" id="qp_date" value="${now.toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Tur</label>
+      <select class="form-control" id="qp_type">
+        <option value="full">To'liq</option>
+        <option value="partial">Qisman</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Izoh</label>
+      <input class="form-control" id="qp_note" placeholder="Izoh..."></div>
+    <div class="modal-footer" style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn btn-success" onclick="saveQuickPayment('${id}','${curMonth}')">💰 Saqlash</button>
+    </div>
+  `);
+}
+
+async function saveQuickPayment(studentId, month) {
+  const amount = parseInt(document.getElementById('qp_amount').value);
+  const date = document.getElementById('qp_date').value;
+  const type = document.getElementById('qp_type').value;
+  const note = document.getElementById('qp_note').value;
+  if (!amount || amount <= 0) { toast('Summani kiriting', 'error'); return; }
+  const res = await api('/api/payments', 'POST', { student_id: studentId, amount, date, month, type, note });
+  if (res.success) {
+    toast('To\'lov qabul qilindi ✅', 'success');
+    closeModal(); loadPayments(); loadDebtors();
+    if (confirm('Chekni chop etasizmi?')) window.open(`/receipt/${res.receipt_id}`, '_blank');
+  } else toast(res.message || 'Xatolik', 'error');
+}
+
+function deletePayment(id) {
+  confirmAction('Bu to\'lovni o\'chirishni tasdiqlaysizmi?', async () => {
+    const res = await api(`/api/payments/${id}`, 'DELETE');
+    if (res.success) { toast('To\'lov o\'chirildi', 'warning'); loadPayments(); loadDebtors(); }
+    else toast('Xatolik', 'error');
+  });
+}
+
+async function sendDebtReminders() {
+  const settings = await api('/api/settings');
+  if (!settings.bot_token) { toast('Telegram bot token sozlanmagan', 'error'); return; }
+  toast('Xabarlar yuborilmoqda...', 'info');
+  const res = await api('/api/telegram/send', 'POST', {
+    target: 'all',
+    message: "Assalomu alaykum! 💳 Farzandingizning bog'cha to'lovi muddati keldi. Iltimos, to'lovni amalga oshiring. Rahmat!"
+  });
+  toast(`✅ Yuborildi: ${res.sent} · ❌ Xato: ${res.failed}`, 'success');
+}
+</script>
+{% endblock %}

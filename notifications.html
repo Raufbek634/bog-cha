@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Bildirishnomalar — Smart Kindergarten{% endblock %}
+{% block page_title %}🔔 Bildirishnomalar{% endblock %}
+{% block content %}
+<div class="section-header">
+  <div class="section-title">Bildirishnomalar</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-ghost" onclick="markAllRead()">✅ Hammasini o'qilgan deb belgilash</button>
+    <button class="btn btn-primary" onclick="runSmartCheck()">🔍 Tekshirish</button>
+  </div>
+</div>
+<div class="card">
+  <div id="notifList"><div class="loading"><div class="spinner"></div>Yuklanmoqda...</div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadNotifications);
+
+async function loadNotifications() {
+  const notifs = await api('/api/notifications');
+  if (!notifs.length) {
+    document.getElementById('notifList').innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div><h3>Bildirishnoma yo\'q</h3><p>Hamma narsa tartibda</p></div>';
+    return;
+  }
+  const icons = { payment:'💳', info:'ℹ️', warning:'⚠️', birthday:'🎂', debt:'💳', absent:'❌' };
+  document.getElementById('notifList').innerHTML = notifs.map(n => `
+    <div class="notif-item ${n.read?'':'unread'}">
+      <div class="notif-icon">${icons[n.type]||'🔔'}</div>
+      <div class="notif-content">
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-time">${fmtDateTime(n.created_at)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm btn-icon notif-del" onclick="dismissNotif('${n.id}',this)" title="O'chirish">✕</button>
+    </div>`).join('');
+}
+
+async function markAllRead() {
+  await api('/api/notifications/mark-read','POST');
+  toast('Hamması o\'qilgan deb belgilandi ✅','success');
+  loadNotifications(); loadNotifBadge();
+}
+
+async function dismissNotif(id, btn) {
+  await api(`/api/notifications/dismiss/${id}`,'DELETE');
+  btn.closest('.notif-item').remove();
+  loadNotifBadge();
+}
+
+async function runSmartCheck() {
+  const alerts = await api('/api/notifications/smart-check');
+  if (!alerts.length) { toast('Hamma narsa tartibda! ✅','success'); return; }
+  toast(`${alerts.length} ta ogohlantirish topildi`,'warning');
+  loadNotifications();
+}
+</script>
+{% endblock %}

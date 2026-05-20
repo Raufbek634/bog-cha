@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Sozlamalar — Smart Kindergarten{% endblock %}
+{% block page_title %}⚙️ Sozlamalar{% endblock %}
+{% block content %}
+<div class="section-title mb-20">Tizim sozlamalari</div>
+<div class="grid-2">
+  <!-- General settings -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">🏫 Umumiy sozlamalar</span></div>
+    <div class="card-body">
+      <div class="form-group"><label class="form-label">Bog'cha nomi</label>
+        <input class="form-control" id="s_name" value="{{ settings.name }}"></div>
+      <div class="form-group"><label class="form-label">Valyuta</label>
+        <select class="form-control" id="s_currency">
+          <option value="UZS" {% if settings.currency=='UZS' %}selected{% endif %}>UZS (so'm)</option>
+          <option value="USD" {% if settings.currency=='USD' %}selected{% endif %}>USD (dollar)</option>
+          <option value="EUR" {% if settings.currency=='EUR' %}selected{% endif %}>EUR (yevro)</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Logo URL (ixtiyoriy)</label>
+        <input class="form-control" id="s_logo" value="{{ settings.logo or '' }}" placeholder="https://..."></div>
+      <button class="btn btn-primary w-full" onclick="saveGeneralSettings()">💾 Saqlash</button>
+    </div>
+  </div>
+
+  <!-- Password change -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">🔒 Parolni o'zgartirish</span></div>
+    <div class="card-body">
+      <div class="form-group"><label class="form-label">Eski parol</label>
+        <input class="form-control" type="password" id="old_pw" placeholder="••••••••"></div>
+      <div class="form-group"><label class="form-label">Yangi parol</label>
+        <input class="form-control" type="password" id="new_pw" placeholder="Kamida 6 belgi"></div>
+      <div class="form-group"><label class="form-label">Yangi parolni tasdiqlang</label>
+        <input class="form-control" type="password" id="new_pw2" placeholder="••••••••"></div>
+      <button class="btn btn-warning w-full" onclick="changePassword()">🔑 Parolni o'zgartirish</button>
+    </div>
+  </div>
+
+  <!-- Telegram settings -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">📱 Telegram Bot</span></div>
+    <div class="card-body">
+      <div class="form-group"><label class="form-label">Bot Token</label>
+        <input class="form-control" id="s_bot_token" value="{{ settings.bot_token or '' }}" placeholder="123456:ABC-DEF..."></div>
+      <div class="form-group"><label class="form-label">Majburiy kanallar (har biri alohida qatorda)</label>
+        <textarea class="form-control" id="s_channels" rows="4" placeholder="@mykindergarten&#10;@parentschannel">{{ settings.required_channels | join('\n') if settings.required_channels else '' }}</textarea></div>
+      <button class="btn btn-primary w-full" onclick="saveTelegramSettings()">💾 Saqlash</button>
+      <div style="margin-top:10px">
+        <button class="btn btn-outline w-full" onclick="testBot()">🤖 Botni sinash</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin login -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">👤 Admin ma'lumotlari</span></div>
+    <div class="card-body">
+      <div style="padding:14px;background:var(--surface2);border-radius:8px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Joriy login:</div>
+        <div style="font-weight:700;font-family:monospace">{{ settings.get('admin_login', '993190712') }}</div>
+      </div>
+      <div class="form-group"><label class="form-label">Yangi login (telefon)</label>
+        <input class="form-control" id="new_login" placeholder="998901234567"></div>
+      <button class="btn btn-ghost w-full" onclick="changeLogin()">💾 Loginni yangilash</button>
+      <div style="margin-top:16px;padding:12px;background:var(--warning-light);border-radius:8px;font-size:12.5px;color:#d97706">
+        ⚠️ Login o'zgartirilgandan so'ng qayta kirishingiz kerak bo'ladi.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-16">
+  <div class="card-header"><span class="card-title">ℹ️ Tizim haqida</span></div>
+  <div class="card-body">
+    <table class="info-table">
+      <tr><td>Tizim versiyasi</td><td><b>v1.0.0</b></td></tr>
+      <tr><td>Backend</td><td><b>Python Flask</b></td></tr>
+      <tr><td>Ma'lumotlar bazasi</td><td><b>JSON fayl tizimi</b></td></tr>
+      <tr><td>Ota-ona portali</td><td><b><a href="/parent" target="_blank" style="color:var(--primary)">/parent</a></b></td></tr>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function saveGeneralSettings() {
+  const data = {
+    name: document.getElementById('s_name').value.trim(),
+    currency: document.getElementById('s_currency').value,
+    logo: document.getElementById('s_logo').value.trim()
+  };
+  const res = await api('/api/settings','POST',data);
+  if (res.success) { toast('Sozlamalar saqlandi ✅','success'); loadSidebarName(); }
+  else toast('Xatolik','error');
+}
+
+async function saveTelegramSettings() {
+  const channels = document.getElementById('s_channels').value.split('\n').map(c=>c.trim()).filter(Boolean);
+  const data = { bot_token: document.getElementById('s_bot_token').value.trim(), required_channels: channels };
+  const res = await api('/api/settings','POST',data);
+  if (res.success) toast('Telegram sozlamalari saqlandi ✅','success');
+  else toast('Xatolik','error');
+}
+
+async function changePassword() {
+  const old_password = document.getElementById('old_pw').value;
+  const new_password = document.getElementById('new_pw').value;
+  const new_pw2 = document.getElementById('new_pw2').value;
+  if (new_password !== new_pw2) { toast('Yangi parollar mos kelmadi','error'); return; }
+  const res = await api('/api/settings/change-password','POST',{old_password,new_password});
+  if (res.success) { toast('Parol o\'zgartirildi ✅','success'); document.getElementById('old_pw').value=''; document.getElementById('new_pw').value=''; document.getElementById('new_pw2').value=''; }
+  else toast(res.message||'Xatolik','error');
+}
+
+async function testBot() {
+  const token = document.getElementById('s_bot_token').value.trim();
+  if (!token) { toast('Bot token kiriting','error'); return; }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = await res.json();
+    if (data.ok) toast(`✅ Bot ishlayapti: @${data.result.username}`,'success');
+    else toast('Bot token noto\'g\'ri','error');
+  } catch { toast('Bot tekshirib bo\'lmadi','error'); }
+}
+
+async function changeLogin() {
+  const new_login = document.getElementById('new_login').value.trim();
+  if (!new_login) { toast('Yangi loginni kiriting','error'); return; }
+  const admins = await fetch('/api/settings').then(r=>r.json());
+  toast('Bu funksiya hozircha ishlamaydi. Parolni o\'zgartiring.','info');
+}
+</script>
+{% endblock %}

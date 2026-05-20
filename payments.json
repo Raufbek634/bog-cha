@@ -1,0 +1,26 @@
+[
+  {
+    "id": "RCP-50602F96",
+    "student_id": "STU-930B67B9",
+    "student_name": "Ali Karimov",
+    "amount": 25000,
+    "date": "2026-05-20",
+    "month": "2026-05",
+    "type": "full",
+    "note": "",
+    "admin_name": "Administrator",
+    "created_at": "2026-05-20T07:48:54.551837"
+  },
+  {
+    "id": "RCP-481240C2",
+    "student_id": "STU-FF724E76",
+    "student_name": "Raufbek Turaqulov",
+    "amount": 250000,
+    "date": "2026-05-20",
+    "month": "2026-05",
+    "type": "full",
+    "note": "",
+    "admin_name": "Administrator",
+    "created_at": "2026-05-20T07:57:28.781925"
+  }
+]

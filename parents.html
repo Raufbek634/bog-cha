@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Ota-onalar — Smart Kindergarten{% endblock %}
+{% block page_title %}👨‍👩‍👧 Ota-onalar{% endblock %}
+{% block content %}
+<div class="section-header">
+  <div class="section-title">Ota-onalar ro'yxati</div>
+</div>
+<div class="filter-bar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="form-control" id="parentSearch" placeholder="Ism yoki telefon..." oninput="filterParents()">
+  </div>
+  <button class="btn btn-primary" onclick="openTelegramModal()">📱 Telegram xabar</button>
+</div>
+<div class="card">
+  <div id="parentsContent"><div class="loading"><div class="spinner"></div>Yuklanmoqda...</div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let allParents = [];
+document.addEventListener('DOMContentLoaded', async () => { await loadParents(); });
+
+async function loadParents() {
+  allParents = await api('/api/parents');
+  renderParents(allParents);
+}
+function filterParents() {
+  const q = document.getElementById('parentSearch').value.toLowerCase();
+  const filtered = q ? allParents.filter(p =>
+    p.name.toLowerCase().includes(q) || p.phone.includes(q)) : allParents;
+  renderParents(filtered);
+}
+function renderParents(parents) {
+  if (!parents.length) {
+    document.getElementById('parentsContent').innerHTML = '<div class="empty-state"><div class="empty-icon">👨‍👩‍👧</div><p>Ota-ona topilmadi</p></div>';
+    return;
+  }
+  document.getElementById('parentsContent').innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Ota-ona ismi</th><th>Telefon</th><th>Farzandlar</th><th>Amallar</th></tr></thead>
+      <tbody>${parents.map(p => `<tr>
+        <td><b>${p.name||'—'}</b></td>
+        <td>${phoneLink(p.phone)}</td>
+        <td>${p.children.map(c=>`<span class="badge badge-primary" style="margin-right:4px">${c.name}</span>`).join('')}</td>
+        <td><a href="/parent?phone=${p.phone}" target="_blank" class="btn btn-outline btn-sm">👀 Ko'rish</a></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+async function openTelegramModal() {
+  const settings = await api('/api/settings');
+  const groups = await api('/api/groups');
+  const groupOptions = groups.map(g=>`<option value="group:${g}">${g} guruhi</option>`).join('');
+  openModal('📱 Telegram xabar yuborish', `
+    ${!settings.bot_token ? '<div style="padding:10px;background:var(--warning-light);border-radius:8px;margin-bottom:14px;color:#d97706;font-size:13px;font-weight:600">⚠️ Bot token sozlanmagan. Sozlamalardan kiriting.</div>' : ''}
+    <div class="form-group"><label class="form-label">Kimga</label>
+      <select class="form-control" id="tg_target">
+        <option value="all">Barcha ota-onalar</option>
+        ${groupOptions}
+      </select></div>
+    <div class="form-group"><label class="form-label">Xabar matni</label>
+      <textarea class="form-control" id="tg_msg" rows="5" placeholder="Xabar matni..."></textarea></div>
+    <div class="modal-footer" style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="sendTelegram()">📤 Yuborish</button>
+    </div>
+  `);
+}
+async function sendTelegram() {
+  const target = document.getElementById('tg_target').value;
+  const message = document.getElementById('tg_msg').value.trim();
+  if (!message) { toast('Xabar matnini kiriting', 'error'); return; }
+  const res = await api('/api/telegram/send', 'POST', { target, message });
+  if (res.success) { toast(`✅ Yuborildi: ${res.sent} · ❌ Xato: ${res.failed}`, 'success'); closeModal(); }
+  else toast(res.message || 'Xatolik', 'error');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}O'quvchilar — Smart Kindergarten{% endblock %}
+{% block page_title %}👨‍🎓 O'quvchilar{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <div>
+    <div class="section-title">O'quvchilar ro'yxati</div>
+    <div class="section-sub" id="studentCount">Yuklanmoqda...</div>
+  </div>
+  <button class="btn btn-primary" onclick="openAddStudent()">➕ Yangi o'quvchi</button>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="form-control" id="searchInput" placeholder="Ism, ota-ona, telefon raqam..." oninput="filterStudents()">
+  </div>
+  <select class="form-control" id="groupFilter" onchange="filterStudents()" style="max-width:160px">
+    <option value="">Barcha guruhlar</option>
+  </select>
+  <select class="form-control" id="statusFilter" onchange="filterStudents()" style="max-width:130px">
+    <option value="">Barcha holat</option>
+    <option value="active">Faol</option>
+    <option value="inactive">Nofaol</option>
+  </select>
+  <div class="tabs" style="margin-bottom:0">
+    <button class="tab-btn active" id="viewCards" onclick="setView('cards')">⊞ Kartalar</button>
+    <button class="tab-btn" id="viewTable" onclick="setView('table')">☰ Jadval</button>
+  </div>
+</div>
+
+<!-- Cards view -->
+<div id="cardsView">
+  <div class="students-grid" id="studentsGrid"></div>
+</div>
+
+<!-- Table view -->
+<div id="tableView" style="display:none">
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Ism Familiya</th><th>Guruh</th>
+          <th>Ota-ona</th><th>Telefon</th><th>Oylik to'lov</th>
+          <th>Qo'shilgan</th><th>Holat</th><th>Amallar</th>
+        </tr>
+      </thead>
+      <tbody id="studentsTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="emptyState" class="empty-state" style="display:none">
+  <div class="empty-icon">👨‍🎓</div>
+  <h3>O'quvchi topilmadi</h3>
+  <p>Qidiruv shartlarini o'zgartiring yoki yangi o'quvchi qo'shing</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allStudents = [];
+let currentView = 'cards';
+let currency = 'UZS';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = await api('/api/settings');
+  currency = settings.currency || 'UZS';
+  await loadStudents();
+  await loadGroups();
+});
+
+async function loadStudents() {
+  const search = document.getElementById('searchInput').value;
+  const group = document.getElementById('groupFilter').value;
+  const status = document.getElementById('statusFilter').value;
+
+  let url = '/api/students?';
+  if (search) url += `search=${encodeURIComponent(search)}&`;
+  if (group) url += `group=${encodeURIComponent(group)}&`;
+  if (status) url += `status=${status}`;
+
+  allStudents = await api(url);
+  document.getElementById('studentCount').textContent = `Jami: ${allStudents.length} ta o'quvchi`;
+  renderStudents();
+}
+
+function filterStudents() { loadStudents(); }
+
+async function loadGroups() {
+  const groups = await api('/api/groups');
+  const sel = document.getElementById('groupFilter');
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g; opt.textContent = g;
+    sel.appendChild(opt);
+  });
+}
+
+function setView(v) {
+  currentView = v;
+  document.getElementById('cardsView').style.display = v === 'cards' ? '' : 'none';
+  document.getElementById('tableView').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('viewCards').classList.toggle('active', v === 'cards');
+  document.getElementById('viewTable').classList.toggle('active', v === 'table');
+  renderStudents();
+}
+
+function renderStudents() {
+  const empty = document.getElementById('emptyState');
+  if (!allStudents.length) {
+    empty.style.display = '';
+    document.getElementById('studentsGrid').innerHTML = '';
+    document.getElementById('studentsTableBody').innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  if (currentView === 'cards') {
+    document.getElementById('studentsGrid').innerHTML = allStudents.map(s => `
+      <div class="student-card">
+        <div class="student-card-header">
+          ${avatarHtml(s)}
+          <div class="student-info">
+            <h4>${s.first_name} ${s.last_name}</h4>
+            <p>${s.group || 'Guruh yo\'q'} · <span class="badge ${s.status==='active'?'badge-success':'badge-gray'}" style="font-size:10px">${s.status==='active'?'Faol':'Nofaol'}</span></p>
+          </div>
+        </div>
+        <div class="student-card-body">
+          <span>👤 ${s.parent_name || '—'}</span>
+          <span>📞 <a class="phone-link" href="tel:${s.parent_phone}">${s.parent_phone || '—'}</a></span>
+          <span>💳 <b class="currency">${Number(s.monthly_fee).toLocaleString()} ${currency}</b>/oy</span>
+          <span>📅 Qo'shilgan: ${fmtDate(s.join_date)}</span>
+          <span style="font-family:monospace;font-size:11px;color:var(--text3)">ID: ${s.id}</span>
+        </div>
+        <div class="student-card-footer">
+          <button class="btn btn-ghost btn-sm" onclick="viewBalance('${s.id}')">📊 Balans</button>
+          <div class="student-actions">
+            <button class="btn btn-outline btn-sm" onclick="openEditStudent('${s.id}')">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}','${s.first_name} ${s.last_name}')">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    document.getElementById('studentsTableBody').innerHTML = allStudents.map(s => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px;color:var(--text3)">${s.id}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">${avatarHtml(s)}<b>${s.first_name} ${s.last_name}</b></div></td>
+        <td><span class="badge badge-primary">${s.group || '—'}</span></td>
+        <td>${s.parent_name || '—'}</td>
+        <td>${phoneLink(s.parent_phone)}</td>
+        <td class="currency">${Number(s.monthly_fee).toLocaleString()} ${currency}</td>
+        <td>${fmtDate(s.join_date)}</td>
+        <td>${statusBadge(s.status)}</td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="viewBalance('${s.id}')" title="Balans">📊</button>
+            <button class="btn btn-outline btn-sm btn-icon" onclick="openEditStudent('${s.id}')" title="Tahrirlash">✏️</button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteStudent('${s.id}','${s.first_name} ${s.last_name}')" title="O'chirish">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+}
+
+function studentForm(s = {}) {
+  return `
+    <form onsubmit="return false">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Ism *</label>
+          <input class="form-control" id="f_first_name" value="${s.first_name||''}" placeholder="Ali" required></div>
+        <div class="form-group"><label class="form-label">Familiya *</label>
+          <input class="form-control" id="f_last_name" value="${s.last_name||''}" placeholder="Karimov" required></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Tug'ilgan sana</label>
+          <input class="form-control" type="date" id="f_birth_date" value="${s.birth_date||''}"></div>
+        <div class="form-group"><label class="form-label">Guruh *</label>
+          <input class="form-control" id="f_group" value="${s.group||''}" placeholder="Kichik guruh" required></div>
+      </div>
+      <div class="form-group"><label class="form-label">Ota-ona ismi</label>
+        <input class="form-control" id="f_parent_name" value="${s.parent_name||''}" placeholder="Karimov Bobur"></div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Telefon raqam</label>
+          <input class="form-control" id="f_parent_phone" value="${s.parent_phone||''}" placeholder="998901234567"></div>
+        <div class="form-group"><label class="form-label">Telegram Chat ID</label>
+          <input class="form-control" id="f_telegram_chat_id" value="${s.telegram_chat_id||''}" placeholder="123456789"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Oylik to'lov (${currency})</label>
+          <input class="form-control" type="number" id="f_monthly_fee" value="${s.monthly_fee||0}" placeholder="500000" required></div>
+        <div class="form-group"><label class="form-label">To'lov kuni</label>
+          <input class="form-control" type="number" id="f_payment_due_day" value="${s.payment_due_day||1}" min="1" max="28"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Qo'shilgan sana</label>
+          <input class="form-control" type="date" id="f_join_date" value="${s.join_date||new Date().toISOString().split('T')[0]}"></div>
+        <div class="form-group"><label class="form-label">Holat</label>
+          <select class="form-control" id="f_status">
+            <option value="active" ${s.status==='active'?'selected':''}>Faol</option>
+            <option value="inactive" ${s.status==='inactive'?'selected':''}>Nofaol</option>
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Rasm URL (ixtiyoriy)</label>
+        <div style="display:flex;gap:8px">
+          <input class="form-control" id="f_image" value="${s.image||''}" placeholder="Rasm URL yoki yuklang">
+          <label class="btn btn-ghost" style="white-space:nowrap;cursor:pointer">📎 Yuklash<input type="file" accept="image/*" style="display:none" onchange="handleImgUpload(this)"></label>
+        </div></div>
+      <div class="form-group"><label class="form-label">Izoh</label>
+        <textarea class="form-control" id="f_notes" rows="2" placeholder="Qo'shimcha ma'lumot...">${s.notes||''}</textarea></div>
+    </form>`;
+}
+
+async function handleImgUpload(input) {
+  if (!input.files[0]) return;
+  toast('Rasm yuklanmoqda...', 'info');
+  const res = await uploadImage(input.files[0]);
+  if (res.success) {
+    document.getElementById('f_image').value = res.url;
+    toast('Rasm yuklandi ✅', 'success');
+  } else {
+    toast(res.message || 'Yuklash xatosi', 'error');
+  }
+}
+
+function getFormData() {
+  return {
+    first_name: document.getElementById('f_first_name').value.trim(),
+    last_name: document.getElementById('f_last_name').value.trim(),
+    birth_date: document.getElementById('f_birth_date').value,
+    group: document.getElementById('f_group').value.trim(),
+    parent_name: document.getElementById('f_parent_name').value.trim(),
+    parent_phone: document.getElementById('f_parent_phone').value.trim(),
+    telegram_chat_id: document.getElementById('f_telegram_chat_id').value.trim(),
+    monthly_fee: parseInt(document.getElementById('f_monthly_fee').value) || 0,
+    payment_due_day: parseInt(document.getElementById('f_payment_due_day').value) || 1,
+    join_date: document.getElementById('f_join_date').value,
+    status: document.getElementById('f_status').value,
+    image: document.getElementById('f_image').value.trim(),
+    notes: document.getElementById('f_notes').value.trim()
+  };
+}
+
+function openAddStudent() {
+  openModal("➕ Yangi o'quvchi qo'shish", studentForm() + `
+    <div class="modal-footer" style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="saveNewStudent()">💾 Saqlash</button>
+    </div>`, 'modal-lg');
+}
+
+async function saveNewStudent() {
+  const data = getFormData();
+  if (!data.first_name || !data.last_name || !data.group) {
+    toast('Majburiy maydonlarni to\'ldiring', 'error'); return;
+  }
+  const res = await api('/api/students', 'POST', data);
+  if (res.success) {
+    toast('O\'quvchi qo\'shildi ✅', 'success');
+    closeModal(); loadStudents(); loadGroups();
+  } else { toast(res.message || 'Xatolik', 'error'); }
+}
+
+async function openEditStudent(id) {
+  const s = await api(`/api/students/${id}`);
+  openModal("✏️ O'quvchini tahrirlash", studentForm(s) + `
+    <div class="modal-footer" style="border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn btn-primary" onclick="saveEditStudent('${id}')">💾 Saqlash</button>
+    </div>`, 'modal-lg');
+}
+
+async function saveEditStudent(id) {
+  const data = getFormData();
+  const res = await api(`/api/students/${id}`, 'PUT', data);
+  if (res.success) {
+    toast('O\'quvchi yangilandi ✅', 'success');
+    closeModal(); loadStudents();
+  } else { toast(res.message || 'Xatolik', 'error'); }
+}
+
+function deleteStudent(id, name) {
+  confirmAction(`"${name}" ni o'chirishni tasdiqlaysizmi? Bu amalni qaytarib bo'lmaydi.`, async () => {
+    const res = await api(`/api/students/${id}`, 'DELETE');
+    if (res.success) { toast('O\'quvchi o\'chirildi', 'warning'); loadStudents(); }
+    else toast('Xatolik', 'error');
+  });
+}
+
+async function viewBalance(id) {
+  const d = await api(`/api/student-balance/${id}`);
+  const s = d.student;
+  const cur = currency;
+  openModal(`📊 ${s.first_name} ${s.last_name} — Balans`, `
+    <div class="payment-summary">
+      <div class="pay-box payable"><div class="pay-box-val">${Number(d.payable_amount).toLocaleString()} ${cur}</div><div class="pay-box-label">To'lanishi kerak</div></div>
+      <div class="pay-box paid"><div class="pay-box-val">${Number(d.paid_amount).toLocaleString()} ${cur}</div><div class="pay-box-label">To'langan</div></div>
+      <div class="pay-box debt"><div class="pay-box-val">${Number(d.debt).toLocaleString()} ${cur}</div><div class="pay-box-label">Qarz</div></div>
+    </div>
+    <table class="info-table">
+      <tr><td>Ish kunlari</td><td><b>${d.working_days} kun</b></td></tr>
+      <tr><td>Kelgan kunlar</td><td><b style="color:var(--success)">${d.attended_days} kun</b></td></tr>
+      <tr><td>Kelmagan kunlar</td><td><b style="color:var(--danger)">${d.absent_days} kun</b></td></tr>
+      <tr><td>Oylik to'lov</td><td><b>${Number(s.monthly_fee).toLocaleString()} ${cur}</b></td></tr>
+    </table>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <a href="/payments" class="btn btn-primary w-full" style="text-align:center">💳 To'lov qilish</a>
+      <a href="/attendance" class="btn btn-outline w-full" style="text-align:center">📅 Davomat</a>
+    </div>
+  `);
+}
+</script>
+{% endblock %}

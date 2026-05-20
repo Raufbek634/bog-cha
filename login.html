@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Kirish — Smart Kindergarten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#1a1d2e 0%,#2d3561 50%,#1a1d2e 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.login-wrap{width:100%;max-width:400px}
+.login-card{background:#fff;border-radius:20px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.login-header{text-align:center;margin-bottom:32px}
+.login-logo{font-size:52px;margin-bottom:12px}
+.login-title{font-size:22px;font-weight:800;color:#1a1d2e;margin-bottom:4px}
+.login-sub{font-size:13px;color:#9098b8}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:12px;font-weight:700;color:#5a6080;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.form-control{width:100%;padding:12px 14px;border:2px solid #e2e6f0;border-radius:10px;font-family:'Nunito',sans-serif;font-size:14px;color:#1a1d2e;outline:none;transition:border-color .15s,box-shadow .15s}
+.form-control:focus{border-color:#4f6ef7;box-shadow:0 0 0 3px rgba(79,110,247,.12)}
+.remember-row{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.remember-row label{font-size:13px;color:#5a6080;font-weight:600;cursor:pointer}
+.btn-login{width:100%;padding:13px;background:#4f6ef7;color:#fff;border:none;border-radius:10px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:all .15s;margin-bottom:14px}
+.btn-login:hover{background:#3a56d4;transform:translateY(-1px)}
+.btn-login:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.error-msg{background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:14px;display:none;text-align:center}
+.login-footer{text-align:center;font-size:12px;color:#9098b8;margin-top:16px}
+.parent-link{display:block;text-align:center;padding:11px;border:2px solid #e2e6f0;border-radius:10px;color:#5a6080;font-size:13px;font-weight:700;text-decoration:none;transition:all .15s}
+.parent-link:hover{border-color:#4f6ef7;color:#4f6ef7;background:#eef1fd}
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo">🎓</div>
+      <div class="login-title">Smart Kindergarten</div>
+      <div class="login-sub">Boshqaruv tizimiga kirish</div>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="form-group">
+      <label class="form-label">Login (Telefon raqam)</label>
+      <input class="form-control" type="text" id="loginInput" placeholder="993190712" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Parol</label>
+      <input class="form-control" type="password" id="passwordInput" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="remember-row">
+      <input type="checkbox" id="rememberMe" style="accent-color:#4f6ef7;width:16px;height:16px">
+      <label for="rememberMe">Meni eslab qol</label>
+    </div>
+
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Kirish →</button>
+    <a href="/parent" class="parent-link">👨‍👩‍👧 Ota-ona portali</a>
+  </div>
+  <div class="login-footer">Smart Kindergarten Management System v1.0</div>
+</div>
+
+<script>
+document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+async function doLogin() {
+  const login = document.getElementById('loginInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const remember = document.getElementById('rememberMe').checked;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('errorMsg');
+
+  if (!login || !password) { showError('Login va parolni kiriting'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Kirilmoqda...';
+  err.style.display = 'none';
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password, remember })
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = '/dashboard';
+    } else {
+      showError(data.message || 'Noto\'g\'ri ma\'lumot');
+      btn.disabled = false; btn.textContent = 'Kirish →';
+    }
+  } catch {
+    showError('Ulanish xatosi. Qayta urinib ko\'ring.');
+    btn.disabled = false; btn.textContent = 'Kirish →';
+  }
+}
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.style.display = 'block';
+}
+</script>
+</body>
+</html>

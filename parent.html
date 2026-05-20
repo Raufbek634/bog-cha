@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ota-ona portali — {{ settings.name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="parent-page" id="loginSection">
+  <div class="parent-card">
+    <div class="parent-header">
+      <div class="parent-logo">🎓</div>
+      <h1>{{ settings.name }}</h1>
+      <p>Farzandingiz ma'lumotlarini ko'rish uchun kiring</p>
+    </div>
+    <div id="loginError" style="display:none;padding:10px 14px;background:var(--danger-light);color:#dc2626;border-radius:8px;margin-bottom:14px;font-size:13px;font-weight:600;text-align:center"></div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchLoginTab('phone',this)">📞 Telefon</button>
+      <button class="tab-btn" onclick="switchLoginTab('id',this)">🆔 O'quvchi ID</button>
+    </div>
+    <div id="phoneLogin">
+      <div class="form-group"><label class="form-label">Telefon raqam</label>
+        <input class="form-control" id="phoneInput" type="tel" placeholder="998901234567" style="font-size:16px"></div>
+    </div>
+    <div id="idLogin" style="display:none">
+      <div class="form-group"><label class="form-label">O'quvchi ID</label>
+        <input class="form-control" id="idInput" placeholder="STU-XXXXXXXX" style="font-size:16px"></div>
+    </div>
+    <button class="btn btn-primary w-full" style="padding:14px;font-size:15px" onclick="doLookup()">Kirish →</button>
+  </div>
+</div>
+
+<div id="portalSection" style="display:none;min-height:100vh;background:var(--bg);padding:16px">
+  <div style="max-width:600px;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:800">🎓 Ota-ona portali</div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">← Chiqish</button>
+    </div>
+
+    <!-- Student info card -->
+    <div class="card mb-16">
+      <div class="card-header"><span class="card-title">👨‍🎓 Farzand ma'lumotlari</span></div>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+          <div id="p_avatar" style="width:56px;height:56px;border-radius:50%;background:var(--primary-light);color:var(--primary);font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0"></div>
+          <div>
+            <div id="p_name" style="font-size:18px;font-weight:800"></div>
+            <div id="p_group" style="font-size:13px;color:var(--text3)"></div>
+          </div>
+          <div id="p_status" style="margin-left:auto"></div>
+        </div>
+        <table class="info-table">
+          <tr><td>ID</td><td id="p_id"></td></tr>
+          <tr><td>Tug'ilgan kun</td><td id="p_birth"></td></tr>
+          <tr><td>Qo'shilgan sana</td><td id="p_join"></td></tr>
+          <tr><td>Ota-ona</td><td id="p_parent"></td></tr>
+          <tr><td>Telefon</td><td id="p_phone"></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Payment summary -->
+    <div class="card mb-16">
+      <div class="card-header"><span class="card-title">💳 Joriy oy to'lovi</span></div>
+      <div class="card-body">
+        <div class="payment-summary">
+          <div class="pay-box payable"><div class="pay-box-val" id="p_payable">—</div><div class="pay-box-label">To'lanishi kerak</div></div>
+          <div class="pay-box paid"><div class="pay-box-val" id="p_paid">—</div><div class="pay-box-label">To'langan</div></div>
+          <div class="pay-box debt"><div class="pay-box-val" id="p_debt">—</div><div class="pay-box-label">Qarz</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchPortalTab('payments',this)">💳 To'lovlar</button>
+      <button class="tab-btn" onclick="switchPortalTab('attendance',this)">📅 Davomat</button>
+      <button class="tab-btn" onclick="switchPortalTab('notifs',this)">🔔 Xabarlar</button>
+    </div>
+
+    <div id="ptab-payments" class="card">
+      <div class="card-body" style="padding:0" id="p_payments_content">
+        <div class="loading"><div class="spinner"></div>Yuklanmoqda...</div>
+      </div>
+    </div>
+    <div id="ptab-attendance" class="card" style="display:none">
+      <div class="card-body" style="padding:0" id="p_att_content">
+        <div class="loading"><div class="spinner"></div>Yuklanmoqda...</div>
+      </div>
+    </div>
+    <div id="ptab-notifs" class="card" style="display:none">
+      <div class="card-body" style="padding:0" id="p_notif_content">
+        <div class="loading"><div class="spinner"></div>Yuklanmoqda...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let currency = 'UZS';
+let portalData = null;
+
+// Auto-fill from URL
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('phone')) {
+  document.getElementById('phoneInput').value = urlParams.get('phone');
+  document.querySelector('.parent-page').style.display = 'flex'; // ensure shown
+}
+
+function switchLoginTab(tab, btn) {
+  document.getElementById('phoneLogin').style.display = tab==='phone' ? '' : 'none';
+  document.getElementById('idLogin').style.display = tab==='id' ? '' : 'none';
+  document.querySelectorAll('.tabs .tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function switchPortalTab(tab, btn) {
+  ['payments','attendance','notifs'].forEach(t => {
+    document.getElementById('ptab-'+t).style.display = t===tab ? '' : 'none';
+  });
+  document.querySelectorAll('#portalSection .tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function doLookup() {
+  const phone = document.getElementById('phoneInput').value.trim();
+  const sid = document.getElementById('idInput').value.trim();
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+
+  let url = '/api/parent/lookup?';
+  if (phone) url += `phone=${encodeURIComponent(phone)}`;
+  else if (sid) url += `student_id=${encodeURIComponent(sid)}`;
+  else { err.textContent = 'Telefon yoki ID kiriting'; err.style.display = ''; return; }
+
+  const data = await api(url);
+  if (!data.success) { err.textContent = data.message || 'Topilmadi'; err.style.display = ''; return; }
+
+  const settings = await api('/api/settings');
+  currency = settings.currency || 'UZS';
+  portalData = data;
+  renderPortal(data);
+}
+
+function renderPortal(data) {
+  const s = data.student;
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('portalSection').style.display = '';
+
+  document.getElementById('p_avatar').textContent = s.first_name[0] || '?';
+  document.getElementById('p_name').textContent = `${s.first_name} ${s.last_name}`;
+  document.getElementById('p_group').textContent = s.group || 'Guruh belgilanmagan';
+  document.getElementById('p_status').innerHTML = statusBadge(s.status);
+  document.getElementById('p_id').innerHTML = `<b style="font-family:monospace">${s.id}</b>`;
+  document.getElementById('p_birth').textContent = fmtDate(s.birth_date) || '—';
+  document.getElementById('p_join').textContent = fmtDate(s.join_date) || '—';
+  document.getElementById('p_parent').textContent = s.parent_name || '—';
+  document.getElementById('p_phone').innerHTML = phoneLink(s.parent_phone);
+
+  const m = data.current_month;
+  document.getElementById('p_payable').textContent = `${Number(m.payable).toLocaleString()} ${currency}`;
+  document.getElementById('p_paid').textContent = `${Number(m.paid).toLocaleString()} ${currency}`;
+  document.getElementById('p_debt').textContent = `${Number(m.debt).toLocaleString()} ${currency}`;
+
+  // Payments
+  const payments = data.payments;
+  if (!payments.length) {
+    document.getElementById('p_payments_content').innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div><p>To\'lov tarixi yo\'q</p></div>';
+  } else {
+    document.getElementById('p_payments_content').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Sana</th><th>Summa</th><th>Oy</th><th>Tur</th></tr></thead>
+        <tbody>${payments.map(p=>`<tr>
+          <td>${fmtDate(p.date)}</td>
+          <td class="currency" style="color:var(--success);font-weight:800">${Number(p.amount).toLocaleString()} ${currency}</td>
+          <td style="font-size:12px">${p.month||'—'}</td>
+          <td>${statusBadge(p.type)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  // Attendance
+  const att = data.attendance.slice().reverse();
+  if (!att.length) {
+    document.getElementById('p_att_content').innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Davomat ma\'lumoti yo\'q</p></div>';
+  } else {
+    document.getElementById('p_att_content').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Sana</th><th>Holat</th><th>Izoh</th></tr></thead>
+        <tbody>${att.map(a=>`<tr>
+          <td>${fmtDate(a.date)}</td>
+          <td>${statusBadge(a.status)}</td>
+          <td style="font-size:12px;color:var(--text3)">${a.note||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  // Notifications
+  const notifs = data.notifications.slice().reverse();
+  if (!notifs.length) {
+    document.getElementById('p_notif_content').innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div><p>Xabar yo\'q</p></div>';
+  } else {
+    document.getElementById('p_notif_content').innerHTML = notifs.map(n=>`
+      <div class="notif-item">
+        <div class="notif-icon">🔔</div>
+        <div class="notif-content">
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${fmtDateTime(n.created_at)}</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function doLogout() {
+  portalData = null;
+  document.getElementById('loginSection').style.display = 'flex';
+  document.getElementById('portalSection').style.display = 'none';
+  document.getElementById('phoneInput').value = '';
+  document.getElementById('idInput').value = '';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') doLookup(); });
+</script>
+</body>
+</html>
